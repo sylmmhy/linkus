@@ -183,17 +183,23 @@ class LinkedInProfileInjector {
     try {
       // Get current LinkedIn profile URL
       const currentProfileUrl = window.location.href
-      
+
       // Extract clean LinkedIn profile URL (remove query params and fragments)
       const cleanUrl = currentProfileUrl.split('?')[0].split('#')[0]
-      
+
       console.log('[LinkedIn Profile Injector] Checking for contact with URL:', cleanUrl)
-      
-      // Call the same API that the sidebar uses
-      const SUPABASE_URL = 'https://shktirpoweaqcvvleldo.supabase.co'
-      const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNoa3RpcnBvd2VhcWN2dmxlbGRvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk1OTQ4MzMsImV4cCI6MjA3NTE3MDgzM30.SJDU3hDL4N7jbhT7Kqp6JuNKjIXWAG3nKMoMk5wuz8w'
-      
-      const url = `${SUPABASE_URL}/functions/v1/chrome-get-contacts?user_name=Yilun&user_email=yilunsun@gmail.com`
+
+      // Get credentials from environment variables
+      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+      const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+      if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+        console.error('[LinkedIn Profile Injector] Missing Supabase credentials')
+        return null
+      }
+
+      // TODO: Get user info from storage instead of hardcoding
+      const url = `${SUPABASE_URL}/functions/v1/chrome-get-contacts?user_email=yilun@example.com`
       
       const response = await fetch(url, {
         method: 'GET',

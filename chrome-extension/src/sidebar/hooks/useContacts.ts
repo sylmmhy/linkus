@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Contact } from '@/types'
 
-// Supabase configuration
-const SUPABASE_URL = 'https://shktirpoweaqcvvleldo.supabase.co'
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNoa3RpcnBvd2VhcWN2dmxlbGRvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk1OTQ4MzMsImV4cCI6MjA3NTE3MDgzM30.SJDU3hDL4N7jbhT7Kqp6JuNKjIXWAG3nKMoMk5wuz8w'
+// Supabase configuration from environment variables
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 // API response interface
 interface APIContact {
@@ -63,7 +63,7 @@ export function useContacts() {
       setLoading(true)
       setError(null)
 
-      const url = `${SUPABASE_URL}/functions/v1/chrome-get-contacts?user_name=Yilun&user_email=yilunsun@gmail.com`
+      const url = `${SUPABASE_URL}/functions/v1/chrome-get-contacts?user_email=yilun@example.com`
       
       const response = await fetch(url, {
         method: 'GET',

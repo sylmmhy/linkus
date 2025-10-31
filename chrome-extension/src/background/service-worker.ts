@@ -154,7 +154,7 @@ class BackgroundService {
   private showNotification(title: string, message: string) {
     chrome.notifications.create({
       type: 'basic',
-      iconUrl: 'icons/icon-48.png',
+      iconUrl: 'icon.svg',
       title,
       message: message.substring(0, 300) // Limit notification length
     })
