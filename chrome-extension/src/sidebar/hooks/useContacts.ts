@@ -29,8 +29,11 @@ function convertAPIContactToContact(apiContact: APIContact, index: number): Cont
   // Fix date parsing - API returns "YYYY-MM-DD", ensure proper parsing
   const dateMet = new Date(apiContact.date_met + 'T00:00:00.000Z')
   
+  // Generate a more stable ID based on name and URL
+  const stableId = `${apiContact.name.toLowerCase().replace(/\s+/g, '-')}-${apiContact.profile_url.split('/').pop() || index}`
+  
   return {
-    id: (index + 1).toString(),
+    id: stableId,
     user_id: 'yilun-user-id',
     name: apiContact.name,
     linkedin_url: apiContact.profile_url,
@@ -86,13 +89,29 @@ export function useContacts() {
       // Convert API contacts to our Contact interface
       const convertedContacts = data.contacts.map(convertAPIContactToContact)
       
+      console.log('[useContacts] Raw API contacts:', data.contacts.length)
+      console.log('[useContacts] Converted contacts:', convertedContacts.length)
+      
+      // Remove duplicates based on name and profile URL
+      const uniqueContacts = convertedContacts.filter((contact, index, array) => {
+        return array.findIndex(c => 
+          c.name.toLowerCase() === contact.name.toLowerCase() && 
+          c.linkedin_url === contact.linkedin_url
+        ) === index
+      })
+      
+      const duplicatesRemoved = convertedContacts.length - uniqueContacts.length
+      if (duplicatesRemoved > 0) {
+        console.log(`[useContacts] Removed ${duplicatesRemoved} duplicate contacts`)
+      }
+      
       // Sort by date_met (newest first)
-      const sortedContacts = convertedContacts.sort((a, b) => 
+      const sortedContacts = uniqueContacts.sort((a, b) => 
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       )
 
       setContacts(sortedContacts)
-      console.log('[useContacts] Fetched contacts:', sortedContacts.length)
+      console.log('[useContacts] Final unique contacts:', sortedContacts.length)
       
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch contacts'
