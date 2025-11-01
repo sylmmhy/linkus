@@ -4,7 +4,14 @@ interface ConnectionData {
   conversation_summary: string
   follow_up_message: string
   future_potential: string
+  name?: string
+  follow_up_text?: string
+  follow_up_suggestion?: string
 }
+
+// Minimal declaration for the Prompt API global in content scripts
+// This avoids adding extra files while keeping TS happy.
+declare const LanguageModel: any;
 
 class LinkedInProfileInjector {
   private observer: MutationObserver | null = null
@@ -232,17 +239,22 @@ class LinkedInProfileInjector {
       }
       
       console.log('[LinkedIn Profile Injector] Found matching contact:', contact.profile_url)
+      console.log('[LinkedIn Profile Injector] Contact keys:', Object.keys(contact))
+      console.log('[LinkedIn Profile Injector] Contact.profile_name:', contact.profile_name)
       
       // Return the connection data using API response fields
       const connectionData = {
         date_met: contact.date_met,
         meeting_event: contact.meeting_event,
         conversation_summary: contact.conversation_summary,
-        follow_up_message: contact.follow_up_suggestion,
-        future_potential: contact.future_potential
+        follow_up_message: contact.follow_up_text,
+        future_potential: contact.future_potential,
+        name: contact.name,
+        follow_up_text: contact.follow_up_text,
+        follow_up_suggestion: contact.follow_up_suggestion
       }
       
-      console.log('[LinkedIn Profile Injector] Returning connection data:', connectionData)
+      console.log('[LinkedIn Profile Injector] Returning connection data (with name):', connectionData)
       return connectionData
       
     } catch (error) {
@@ -278,16 +290,16 @@ class LinkedInProfileInjector {
         </h2>
         <div style="display: flex; gap: 100px; margin-bottom: 16px;">
           <div>
-            <strong style="font-weight: 600;">date_met</strong>
+            <strong style="font-weight: 600;">Date met</strong>
             <span style="margin-left: 16px;">${data.date_met}</span>
           </div>
           <div>
-            <strong style="font-weight: 600;">meeting_event</strong>
+            <strong style="font-weight: 600;">Meeting event</strong>
             <span style="margin-left: 16px;">${data.meeting_event}</span>
           </div>
         </div>
         <div>
-          <strong style="font-weight: 600; display: block; margin-bottom: 8px;">conversation_summary</strong>
+          <strong style="font-weight: 600; display: block; margin-bottom: 8px;">Conversation summary</strong>
           <div style="font-size: 14px; line-height: 1.6; color: rgba(0, 0, 0, 0.9);">
             ${data.conversation_summary}
           </div>
@@ -296,6 +308,27 @@ class LinkedInProfileInjector {
     `
 
     return section
+  }
+
+  private async generateFollowUpWithPromptAPI(): Promise<string> {
+    const contact = await this.fetchConnectionData()
+    if (!contact) throw new Error('Missing contact context')
+
+    const hasAPI = typeof (globalThis as any).LanguageModel !== 'undefined'
+    const availability = hasAPI ? await (LanguageModel as any).availability() : 'unavailable'
+    if (availability === 'unavailable') throw new Error('Language model unavailable')
+
+    // Recipient name from database only (profile_name mapped to name)
+    const recipientName = ((contact as ConnectionData).name || '').trim()
+
+    const session = await (LanguageModel as any).create()
+    try {
+      const prompt = `Generate a concise 1-2 sentences, friendly LinkedIn follow-up message based on the context.\nContext:\n- Recipient name: ${recipientName}\n- Date met: ${contact.date_met}\n- Event: ${contact.meeting_event}\n- Follow-up suggestion: ${contact.follow_up_suggestion || ''}\n- Conversation summary: ${contact.conversation_summary}\n\nRequirements:\n- Tone: professional, warm, and personal\n- Keep it under 120 words\n- Personalize naturally using the recipient's name if appropriate\n- Do not include placeholders; write a ready-to-send message\n- Output only the message text, no [Your Name] or [Your Company] needed.`
+      const result = await session.prompt(prompt)
+      return String(result || '').trim()
+    } finally {
+      try { session.destroy?.() } catch {}
+    }
   }
 
   private createFollowUpMessageSection(message: string): HTMLElement {
@@ -328,7 +361,7 @@ class LinkedInProfileInjector {
           line-height: 1.6;
           color: rgba(0, 0, 0, 0.9);
           margin-bottom: 20px;
-        ">
+        " class="followup-message-text">
           ${message}
         </div>
         <div style="display: flex; gap: 12px; justify-content: flex-end;">
@@ -361,18 +394,39 @@ class LinkedInProfileInjector {
     `
 
     // Add event listeners
-    const regenerateBtn = section.querySelector('.regenerate-btn')
-    const copyBtn = section.querySelector('.copy-message-btn')
+    const regenerateBtn = section.querySelector('.regenerate-btn') as HTMLButtonElement | null
+    const copyBtn = section.querySelector('.copy-message-btn') as HTMLButtonElement | null
+    const messageEl = section.querySelector('.followup-message-text') as HTMLElement | null
 
-    regenerateBtn?.addEventListener('click', () => {
+    regenerateBtn?.addEventListener('click', async () => {
       console.log('[LinkedIn Profile Injector] Regenerate button clicked')
-      // TODO: Call API to regenerate message
+      if (!messageEl) return
+      try {
+        if (regenerateBtn) {
+          regenerateBtn.disabled = true
+          regenerateBtn.textContent = 'Regenerating…'
+        }
+        const original = messageEl.textContent || ''
+        messageEl.textContent = 'Generating a new suggestion…'
+
+        const newMessage = await this.generateFollowUpWithPromptAPI()
+        messageEl.textContent = newMessage?.trim() || original
+      } catch (err) {
+        console.error('[LinkedIn Profile Injector] Regenerate failed:', err)
+        messageEl.textContent = 'Sorry, failed to regenerate. Please try again.'
+      } finally {
+        if (regenerateBtn) {
+          regenerateBtn.disabled = false
+          regenerateBtn.textContent = 'Regenerate'
+        }
+      }
     })
 
     copyBtn?.addEventListener('click', () => {
       console.log('[LinkedIn Profile Injector] Copy message button clicked')
-      navigator.clipboard.writeText(message)
-      // TODO: Show toast notification
+      const current = (messageEl?.textContent || message || '').trim()
+      navigator.clipboard.writeText(current)
+      // Optionally: add toast UI later
     })
 
     return section
